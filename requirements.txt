@@ -1,0 +1,10 @@
+datasets
+pandas
+sentence-transformers
+scikit-learn
+faiss-cpu
+transformers==4.46.3
+keybert
+langchain
+langchain-groq
+langchain-community
