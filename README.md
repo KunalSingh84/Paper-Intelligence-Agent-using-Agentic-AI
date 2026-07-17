@@ -77,16 +77,15 @@ Every question is wrapped in error handling, and every successful answer is logg
 
 ## 📊 Project Structure
 
-📦 Paper-Intelligence-Agent-using-Agentic-AI
-┣ 📁 Notebook
-┃ ┗ Paper_Intelligence_Agent.ipynb
-┣ 📁 Docs
-┃ ┣ architecture.md
-┃ ┗ design_decisions.md
-┣ 📁 Sample_Outputs
-┃ ┗ agent_log.json
-┣ 📄 requirements.txt
-┗ 📄 README.md
+- `README.md`
+- `requirements.txt`
+- **Notebook/**
+  - `Paper_Intelligence_Agent.ipynb`
+- **Docs/**
+  - `architecture.md`
+  - `design_decisions.md`
+- **Sample_Outputs/**
+  - `agent_log.json`
 
 ---
 
