@@ -129,18 +129,18 @@ ask_agent("Compare papers about GANs")
 
 Output (abridged):
 
+```
 Paper 1: Learning to Avoid Errors in GANs by Manipulating Input Spaces
-
-Focus: Reducing visual artifacts via input space manipulation
+- Focus: Reducing visual artifacts via input space manipulation
 
 Paper 2: The Numerics of GANs
-
-Focus: Analyzing convergence properties of GAN training algorithms
+- Focus: Analyzing convergence properties of GAN training algorithms
 
 Comparison: Both aim to improve GAN stability, but Paper 1 targets
 image-quality artifacts while Paper 2 addresses training convergence.
+
 Tool used: compare_papers_tool
----
+```
 
 ## ▶️ How to Run
 
