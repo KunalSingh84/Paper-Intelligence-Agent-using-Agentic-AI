@@ -4,6 +4,7 @@ sentence-transformers
 scikit-learn
 faiss-cpu
 transformers==4.46.3
+torch
 keybert
 langchain
 langchain-groq
