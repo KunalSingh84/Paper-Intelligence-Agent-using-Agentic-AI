@@ -1,37 +1,82 @@
-# Design Decisions
+# Architecture
 
-This document explains the reasoning behind key engineering choices made while building this project, based on issues actually encountered during development and testing.
+## Overview
 
-## Why Hybrid NER Instead of One Method
+This project is an autonomous research agent. Data flows through five stages: retrieval, enrichment, tool wrapping, agent reasoning, and response synthesis.
 
-A purely rule-based tagger only catches entities already in its curated lists — it has no way to detect an organization it wasn't told about in advance. A purely transformer-based tagger (HuggingFace's `dslim/bert-base-NER`) can catch unlisted entities, but is a general-purpose model with no knowledge of ML-specific vocabulary, and is prone to tokenization issues on domain-specific terms.
+## Pipeline Diagram
 
-Combining both means: reliable detection of known ML vocabulary (frameworks, models, languages) via rules, plus the ability to catch previously-unlisted organizations via the transformer model.
+```mermaid
+flowchart TD
+    A[User Query] --> B["ask_agent(question)"]
+    B --> C{Groq LLM<br/>bound to tools}
+    C -->|search| D[search_papers_tool]
+    C -->|keywords| E[extract_keywords_tool]
+    C -->|compare| F[compare_papers_tool]
+    C -->|explain| G[explain_paper_tool]
 
-## Why a 0.95 Confidence Threshold
+    D --> H[FAISS Similarity Search]
+    H --> I[BART Summarizer]
+    I --> J[Hybrid NER]
 
-Initial testing with the default aggregation used a lower implicit threshold, which let through incorrect detections such as tagging "Torch" (a framework, not a company) and a broken subword fragment "Ten" (a leftover piece of a mis-tokenized "TensorFlow") as organizations. Raising the confidence threshold to 0.95 filtered these out while still correctly retaining high-confidence detections like "Google" (0.998 confidence).
+    F --> K[Fetch 2 papers]
+    K --> L[Structured LLM Comparison]
 
-## Why Subword Fragment Filtering
+    G --> M[Fetch 1 paper]
+    M --> N[Beginner-friendly Explanation]
 
-BERT-based tokenizers split unfamiliar words into subword pieces (for example, "TensorFlow" was sometimes split into `Ten`, `##sor`, `##Flow`). These fragments are marked with a `##` prefix by the tokenizer. Any word starting with `##` is discarded, since it represents an incomplete piece of a larger word rather than a standalone entity.
+    J --> O[Raw Tool Result]
+    E --> O
+    L --> O
+    N --> O
 
-## Why Self-Reference Filtering
+    O --> P[LLM Synthesizes Final Answer]
+    P --> Q[Print Answer + Log to agent_log.json]
+```
 
-Testing on the paper "LightNet: A Versatile, Standalone Matlab-based Environment for Deep Learning" showed the NER model tagging "LightNet" as an organization — but LightNet is the paper's own subject, not an external company it mentions. Entities matching words in the paper's own title are now excluded from the Organization category.
+## Pipeline Flow
 
-## Why a Known-Dataset Exclusion List
+1. **User Query** enters the system via `ask_agent(question)`.
+2. **FAISS Similarity Search** retrieves the top-k most relevant papers (title + abstract).
+3. **Enrichment Stage** runs on each retrieved paper:
+   - BART Summarizer produces a concise summary
+   - KeyBERT extracts top keyphrases
+   - Hybrid NER extracts entities (Frameworks, Models, Languages, Organizations)
+4. **Four LangChain Tools** wrap this functionality:
+   - `search_papers_tool` — search + summarize + entities
+   - `extract_keywords_tool` — keyword extraction only
+   - `compare_papers_tool` — structured LLM comparison of two papers
+   - `explain_paper_tool` — beginner-friendly explanation of one paper
+5. **Groq LLM bound to tools** decides which tool fits the user's question.
+6. **Tool executes** and returns a raw result.
+7. **LLM synthesizes** a final answer from the raw result into natural language.
+8. `ask_agent()` prints the answer and logs it to `agent_log.json`.
 
-Benchmark dataset names are frequently mistagged as organizations by general-purpose NER models, since they are capitalized proper nouns with no other distinguishing signal. This was observed directly with "DAQUAR" (an image question-answering dataset) and "TIMIT" (a speech dataset), both initially tagged as Organizations. A small exclusion list (`daquar`, `timit`, `mnist`, `imagenet`, `cifar`, `vqa`) filters these out.
+## Hybrid NER Sub-Architecture
 
-## Why `llm.bind_tools()` Instead of `create_tool_calling_agent()`
+1. **Text input** (a cleaned paper abstract) is passed to two parallel extractors:
+   - **Rule-based classifier** — matches against curated lists: Frameworks, Models, Languages, Organizations
+   - **HuggingFace NER** (`dslim/bert-base-NER`) — detects general ORG/PERSON/LOC entities
+   <!-- NOTE: verify this function name against your notebook — earlier draft had it
+        as `classify_query_entities`, which doesn't match the tool names used
+        elsewhere in this doc. Rename here to match whatever the notebook actually calls. -->
+2. **Filtering layer** applied to HuggingFace's output before merging:
+   - Discard subword fragments (words starting with `##`)
+   - Discard confidence scores below 0.95
+   - Discard words shorter than 4 characters
+   - Discard entities that match the paper's own title (self-reference)
+   - Discard known dataset names (TIMIT, DAQUAR, MNIST, etc.)
+   - Discard generic architecture terms (network, perceptron, etc.)
+3. **Merged entity dictionary** — rule-based results plus any new organizations HuggingFace found that passed filtering.
 
-LangChain's `create_tool_calling_agent()` and `AgentExecutor` classes (used in some LangChain tutorials) are not available in LangChain 1.x, which restructured how agents are built. Since the installed environment used LangChain 1.3.13, `llm.bind_tools(tools)` was used instead — a more direct approach where the LLM is given the tool definitions and returns which tool it wants to call, which is then executed manually. This achieves the same outcome with fewer dependencies on a specific LangChain agent class.
+## Known Limitations
 
-## Why a Separate Structured Prompt for Paper Comparison
+- The 0.95 confidence threshold was tuned against a small manual test set (a handful of terms like "Google" vs. "Torch"/"TensorFlow" fragments) rather than a labeled evaluation set — recall on rare or non-Western organization names is untested.
+- `compare_papers_tool` assumes both papers were successfully retrieved and summarized upstream; it doesn't gracefully handle the case where one paper's abstract is missing or malformed.
+- The dataset exclusion list (TIMIT, DAQUAR, etc.) is manually maintained and will miss newly encountered dataset names until added.
 
-An early version of `compare_papers_tool` simply returned the raw abstracts of two papers, leaving the LLM to interpret them however it chose in the final synthesis step. This produced comparisons of inconsistent quality and structure. The tool was rewritten to build an explicit prompt asking the LLM to compare the two papers across four fixed criteria — Research Objective, Methodology, Key Contributions, and Limitations — producing a consistently structured comparison every time.
+## Why This Structure
 
-## Why Error Handling Was Added
-
-The initial version of `ask_agent()` had no error handling — if the LLM ever returned zero tool calls for an ambiguous question, the function would crash with an unhandled `IndexError`. A `try/except` block was added around the core logic so the function fails gracefully with a readable message instead of an unhandled traceback.
+- Retrieval is separated from enrichment so any of the four tools can reuse the same query logic without duplicating FAISS code.
+- Hybrid NER runs on cleaned abstract text, not the raw query — this ensures entities are detected in actual paper content, not just user input.
+- The agent layer is a thin decision layer — it doesn't contain business logic itself, it only routes to the correct tool and passes the result to the LLM for final synthesis. This keeps each tool independently testable.
