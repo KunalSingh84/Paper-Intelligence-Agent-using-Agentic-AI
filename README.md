@@ -75,18 +75,17 @@ Every question is wrapped in error handling, and every successful answer is logg
 
 ---
 
-## 📊 Project Structure
+## 📁 Project Structure
 
-- `README.md`
-- `requirements.txt`
+- [`README.md`](README.md)
+- [`requirements.txt`](requirements.txt)
 - **Notebook/**
-  - `Paper_Intelligence_Agent.ipynb`
+  - [`Paper_Intelligence_Agent.ipynb`](Notebook/Paper_Intelligence_Agent.ipynb)
 - **Docs/**
-  - `architecture.md`
-  - `design_decisions.md`
+  - [`architecture.md`](Docs/architecture.md)
+  - [`design_decisions.md`](Docs/design_decisions.md)
 - **Sample_Outputs/**
-  - `agent_log.json`
-
+  - [`agent_log.json`](Sample_Outputs/agent_log.json)
 ---
 
 ## 🔧 Technologies Used
