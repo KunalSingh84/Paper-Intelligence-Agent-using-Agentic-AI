@@ -2,11 +2,11 @@
 
 ## Overview
 
-This project extends a research paper search/summarization pipeline into an autonomous agent. Data flows through five stages: retrieval, enrichment, tool wrapping, agent reasoning, and response synthesis.
+This project is an autonomous research agent. Data flows through five stages: retrieval, enrichment, tool wrapping, agent reasoning, and response synthesis.
 
 ## Pipeline Flow
 
-1. **User Query** enters the system.
+1. **User Query** enters the system via `ask_agent(question)`.
 2. **FAISS Similarity Search** retrieves the top-k most relevant papers (title + abstract).
 3. **Enrichment Stage** runs on each retrieved paper:
    - BART Summarizer produces a concise summary
@@ -39,5 +39,5 @@ This project extends a research paper search/summarization pipeline into an auto
 ## Why This Structure
 
 - **Retrieval is separated from enrichment** so any of the 4 tools can reuse the same search logic without duplicating FAISS query code.
-- **Hybrid NER runs on cleaned abstract text**, not the raw query — this was a deliberate change from the original rule-based-only system, which only tagged entities in the user's query, not the actual paper content.
+- **Hybrid NER runs on cleaned abstract text**, not the raw query — this ensures entities are detected in actual paper content, not just user input.
 - **The agent layer is a thin decision layer** — it doesn't contain business logic itself, it only routes to the correct tool and passes the result to the LLM for final synthesis. This keeps each tool independently testable.
